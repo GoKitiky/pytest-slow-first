@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import importlib
 import json
 import logging
@@ -42,7 +41,7 @@ class Test:
 
     @property
     def total_duration(self) -> float:
-        return self.setup_duration + self.call_duration + self.teardown_duration
+        return (self.setup_duration or 0.0) + (self.call_duration or 0.0) + (self.teardown_duration or 0.0)
 
     def set_duration(self, kind: str, duration: float):
         setattr(self, f"{kind}_duration", duration)
@@ -65,7 +64,7 @@ class SlowFirst:
         self.enabled = enabled
 
     def save(self):
-        log_slow_first("Saving testes durations")
+        log_slow_first("Saving test durations")
         with open(SLOW_FIRST_PATH, 'w') as f:
             f.write(self.serialize())
 
@@ -74,7 +73,7 @@ class SlowFirst:
         if os.path.exists(SLOW_FIRST_PATH):
             with open(SLOW_FIRST_PATH, 'r') as f:
                 data = f.read()
-            log_slow_first("Loaded testes durations from previous run. Applying order")
+            log_slow_first("Loaded test durations from previous run. Applying order")
         else:
             log_slow_first("No previous run found. Skipping order")
             return None
@@ -147,7 +146,8 @@ def pytest_collection_modifyitems(session, config, items):
 
 
 def pytest_report_teststatus(report, config):
-    if report.passed is True:
+    # Improved: report.passed is deprecated in pytest >=4.0
+    if report.outcome == "passed":
         _get_slow_first_from_config(config).set_duration(report.nodeid, report.when, report.duration)
 
 
@@ -156,7 +156,7 @@ def pytest_sessionstart(session):
     setattr(session.config, 'slow_first', SlowFirst(enabled=using_slow_first))
 
 
-def pytest_terminal_summary(exitstatus, config):
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
     slow_first = _get_slow_first_from_config(config)
 
     if exitstatus == 0:
